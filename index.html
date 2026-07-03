@@ -83,34 +83,44 @@ function show(id){['load','err','inv','ext'].forEach(function(i){document.getEle
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function date(s){var d=new Date(s);return(d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}
 function get(path){return fetch(SB+path,{headers:{apikey:KEY,Authorization:'Bearer '+KEY}}).then(function(r){if(!r.ok)throw r;return r.json()})}
+function setGroupName(gname){
+  var ico=gname?gname.charAt(0).toUpperCase():'G';
+  document.getElementById('eico').textContent=ico;
+  document.getElementById('ename').textContent=gname||'';
+  document.getElementById('iname').textContent=gname||'';
+}
 (function(){
   var token=(new URLSearchParams(location.search)).get('token');
   if(!token){show('err');return}
-  get('/rest/v1/invite_tokens?token=eq.'+encodeURIComponent(token)+'&select=role,group_id,groups(name)&limit=1')
+  get('/rest/v1/invite_tokens?token=eq.'+encodeURIComponent(token)+'&select=role,group_id&limit=1')
   .then(function(rows){
     if(!rows||rows.length===0){show('err');return}
-    var r=rows[0],gname=(r.groups&&r.groups.name)||'&#12464;&#12523;&#12540;&#12503;',role=r.role;
-    if(role==='external'){
-      document.getElementById('eico').textContent=gname.charAt(0).toUpperCase();
-      document.getElementById('ename').textContent=gname;
-      get('/rest/v1/posts?group_id=eq.'+r.group_id+'&visibility=eq.external&order=created_at.desc&select=id,title,content,created_at,profiles!posts_author_id_fkey(display_name)')
-      .then(function(ps){
-        var el=document.getElementById('posts');
-        if(!ps||ps.length===0){el.innerHTML='<div class="empty">&#20844;&#38283;&#25237;&#31295;&#12399;&#12354;&#12426;&#12414;&#12379;&#12435;</div>';}
-        else{el.innerHTML=ps.map(function(p){var au=(p.profiles&&p.profiles.display_name)||'&#19981;&#26126;';return'<div class="post"><div class="pt">'+esc(p.title)+'</div><div class="pb">'+esc(p.content)+'</div><div class="pm"><span>'+esc(au)+'</span><span>'+date(p.created_at)+'</span></div></div>'}).join('')}
-        show('ext');
-      }).catch(function(){show('ext')});
-    }else{
-      var label=role==='editor'?'&#32232;&#38598;&#32773;':'&#38299;&#35239;&#32773;';
-      var desc=role==='editor'?'&#25237;&#31295;&#12398;&#20316;&#25104;&#12539;&#32232;&#38598;&#12364;&#12391;&#12365;&#12414;&#12377;':'&#25237;&#31295;&#12434;&#38299;&#35239;&#12391;&#12365;&#12414;&#12377;';
-      var deep='keijiboard://invite/'+token;
-      document.getElementById('iname').textContent=gname;
-      document.getElementById('irole').textContent=label;
-      document.getElementById('idesc').textContent=desc;
-      document.getElementById('ibtn').href=deep;
-      setTimeout(function(){location.href=deep},800);
-      show('inv');
-    }
+    var r=rows[0],role=r.role,groupId=r.group_id;
+    // fetch group name separately to avoid RLS join issues
+    get('/rest/v1/groups?id=eq.'+groupId+'&select=name&limit=1')
+    .then(function(gs){return(gs&&gs[0]&&gs[0].name)||''})
+    .catch(function(){return''})
+    .then(function(gname){
+      setGroupName(gname);
+      if(role==='external'){
+        get('/rest/v1/posts?group_id=eq.'+groupId+'&visibility=eq.external&order=created_at.desc&select=id,title,content,created_at,profiles!posts_author_id_fkey(display_name)')
+        .then(function(ps){
+          var el=document.getElementById('posts');
+          if(!ps||ps.length===0){el.innerHTML='<div class="empty">&#20844;&#38283;&#25237;&#31295;&#12399;&#12354;&#12426;&#12414;&#12379;&#12435;</div>';}
+          else{el.innerHTML=ps.map(function(p){var au=(p.profiles&&p.profiles.display_name)||'';return'<div class="post"><div class="pt">'+esc(p.title)+'</div><div class="pb">'+esc(p.content)+'</div><div class="pm"><span>'+esc(au)+'</span><span>'+date(p.created_at)+'</span></div></div>'}).join('')}
+          show('ext');
+        }).catch(function(){show('ext')});
+      }else{
+        var label=role==='editor'?'&#32232;&#38598;&#32773;':'&#38299;&#35239;&#32773;';
+        var desc=role==='editor'?'&#25237;&#31295;&#12398;&#20316;&#25104;&#12539;&#32232;&#38598;&#12364;&#12391;&#12365;&#12414;&#12377;':'&#25237;&#31295;&#12434;&#38299;&#35239;&#12391;&#12365;&#12414;&#12377;';
+        var deep='keijiboard://invite/'+token;
+        document.getElementById('irole').innerHTML=label;
+        document.getElementById('idesc').innerHTML=desc;
+        document.getElementById('ibtn').href=deep;
+        setTimeout(function(){location.href=deep},800);
+        show('inv');
+      }
+    });
   }).catch(function(){show('err')});
 })();
 </script>
